@@ -35,14 +35,14 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-20.04
           - ubuntu-22.04
+          - ubuntu-24.04
         rust:
           - stable
           - beta
         experimental: [false]
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             rust: nightly
             experimental: true
     steps:
