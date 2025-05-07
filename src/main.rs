@@ -11,6 +11,7 @@ use log4rs::config::{Appender, Config, Root};
 use log4rs::encode::pattern::PatternEncoder;
 
 mod azure;
+mod azure_credential_interop;
 mod message;
 mod processor;
 

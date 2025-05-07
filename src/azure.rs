@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 use std::sync::Arc;
 
-use azure_identity::{DefaultAzureCredential, DefaultAzureCredentialBuilder};
+use azure_identity::DefaultAzureCredentialBuilder;
 use azure_storage::StorageCredentials;
 use azure_storage_blobs::{
     blob::operations::GetPropertiesResponse,
@@ -10,6 +10,8 @@ use azure_storage_blobs::{
 };
 use log::debug;
 use url::Url;
+
+use crate::azure_credential_interop::TokenCredentialInterop;
 
 #[derive(Debug)]
 pub struct AzureBlob {
@@ -55,13 +57,15 @@ impl AzureBlob {
 }
 
 pub(crate) struct AzureRegistry {
-    credential: Arc<DefaultAzureCredential>,
+    credential: Arc<TokenCredentialInterop>,
 }
 
 impl AzureRegistry {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Get a credential for Azure
-        let credential = DefaultAzureCredentialBuilder::new().build()?;
+        let default_credential = DefaultAzureCredentialBuilder::new().build()?;
+        let credential = TokenCredentialInterop::new(default_credential);
+
         Ok(AzureRegistry {
             credential: Arc::new(credential),
         })
