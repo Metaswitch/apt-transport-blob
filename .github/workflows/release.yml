@@ -32,7 +32,7 @@ jobs:
       - name: Install semantic-release-cargo
         uses: EricCrosson/install-github-release-binary@v2
         with:
-          targets: semantic-release-cargo@2
+          targets: semantic-release-cargo/semantic-release-cargo@2
       - name: Prepare semantic-release for Rust
         run: semantic-release-cargo prepare ${{ needs.get-next-version.outputs.new-release-version }}
 
