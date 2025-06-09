@@ -29,12 +29,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install semantic-release-cargo
-        uses: EricCrosson/install-github-release-binary@v2
-        with:
-          targets: semantic-release-cargo/semantic-release-cargo@2
-      - name: Prepare semantic-release for Rust
-        run: semantic-release-cargo prepare ${{ needs.get-next-version.outputs.new-release-version }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
@@ -42,8 +36,20 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
+      - name: Install musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Install semantic-release-cargo
+        run: cargo install --locked semantic-release-cargo
+
       - name: Install cargo-deb
         run: cargo install --locked cargo-deb
+
+      - name: Prepare semantic-release for Rust
+        run: semantic-release-cargo prepare ${{ needs.get-next-version.outputs.new-release-version }}
 
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
