@@ -28,6 +28,6 @@ Status: In development
 ### Added
 - Initial version.
 
-[unreleased]: https://github.com/microsoft/apt-transport-blob/compare/0.2.0...HEAD
-[0.2.0]: https://github.com/microsoft/apt-transport-blob/compare/0.1.0...0.2.0
-[0.1.0]: https://github.com/microsoft/apt-transport-blob/tree/0.1.0
+[unreleased]: https://github.com/Metaswitch/apt-transport-blob/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/Metaswitch/apt-transport-blob/compare/0.1.0...0.2.0
+[0.1.0]: https://github.com/Metaswitch/apt-transport-blob/tree/0.1.0

@@ -4,7 +4,7 @@
 name = "apt-transport-blob"
 version = "0.2.0"
 edition = "2021"
-authors = ["Microsoft Corporation"]
+authors = ["Alianza, Inc"]
 license = "MIT"
 homepage = "https://github.com/Metaswitch/apt-transport-blob"
 repository = "https://github.com/Metaswitch/apt-transport-blob"
@@ -35,6 +35,7 @@ nom = "8.0.0"
 thiserror = "2.0.10"
 tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
+openssl = { version = "0.10.73", features = ["vendored"] }
 
 [dev-dependencies]
 env_logger = "0.11.8"
