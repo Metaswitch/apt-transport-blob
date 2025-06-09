@@ -1,0 +1,34 @@
+{
+    "tagFormat": "${version}",
+    "plugins": [
+        "@semantic-release/commit-analyzer",
+        "@semantic-release/release-notes-generator",
+        [
+        "@semantic-release/exec",
+        {
+            "verifyConditionsCmd": "semantic-release-cargo verify-conditions",
+            "prepareCmd": "semantic-release-cargo prepare ${nextRelease.version}",
+            "publishCmd": "semantic-release-cargo publish"
+        }
+        ],
+        [
+            "@semantic-release/github",
+            {
+                "assets": [
+                    {
+                        "path": "dist/blob-x86_64-unknown-linux-musl",
+                        "label": "x86_64-unknown-linux-musl"
+                    },
+                    {
+                        "path": "dist/*.deb",
+                        "label": "Debian Package"
+                    },
+                    {
+                        "path": "dist/SHA256SUMS.txt",
+                        "label": "SHA256SUMS.txt"
+                    }
+                ]
+            }
+        ]
+    ]
+}

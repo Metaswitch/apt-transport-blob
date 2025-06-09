@@ -1,0 +1,11 @@
+# Copyright (c) Alianza, Inc. All rights reserved.
+# Highly Confidential Material
+image: rust:1.87
+forward_ssh_agent: true
+shell: bash
+init:
+  - apt update
+  - apt install -y musl-tools
+  - rustup target add x86_64-unknown-linux-musl
+  - cargo install --locked cargo-deb
+  - export CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
