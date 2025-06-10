@@ -65,7 +65,7 @@ jobs:
 
       - name: Create binary checksum
         run: |
-          shasum --algorithm 256 --binary *.deb blob-${{ matrix.target }} | tee SHA256SUM.txt
+          shasum --algorithm 256 --binary *.deb blob-${{ matrix.target }} | tee SHA256SUMS.txt
         working-directory: ./dist
 
       - name: Setup Node.js
