@@ -2,7 +2,8 @@
 # Licensed under the MIT License.
 [package]
 name = "apt-transport-blob"
-version = "0.2.0"
+# This version gets set by semantic-release at the point of release.
+version = "0.0.0"
 edition = "2021"
 authors = ["Alianza, Inc"]
 license = "MIT"
