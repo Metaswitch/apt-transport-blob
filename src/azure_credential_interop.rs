@@ -26,7 +26,7 @@ impl azure_core_for_storage::auth::TokenCredential for TokenCredentialInterop {
     ) -> azure_core_for_storage::Result<azure_core_for_storage::auth::AccessToken> {
         let access_token = self
             .credential
-            .get_token(scopes)
+            .get_token(scopes, None)
             .await
             .map_err(|err| Error::new(ErrorKind::Credential, err))?;
 
