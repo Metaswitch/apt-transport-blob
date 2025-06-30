@@ -144,12 +144,12 @@ impl Message {
         match Message::parse(input) {
             Ok((b"", message)) => Ok(message),
             Ok((_, _)) => Err(Error::MessageTooMuchData),
-            Err(err) => Err(Error::MessageParse(format!("{}", err))),
+            Err(err) => Err(Error::MessageParse(format!("{err}"))),
         }
     }
 
     pub fn send(&self) {
-        print!("{}", self);
+        print!("{self}");
     }
 
     pub fn send_status(message: &str) {
@@ -217,7 +217,7 @@ impl Display for Message {
             self.message_type.description()
         )?;
         for (key, value) in &self.headers {
-            writeln!(f, "{}: {}", key, value)?;
+            writeln!(f, "{key}: {value}")?;
         }
         writeln!(f)?;
         Ok(())
@@ -348,7 +348,7 @@ mod tests {
             headers: vec![("Key".to_string(), "Value".to_string())],
         };
 
-        let output = format!("{}", message);
+        let output = format!("{message}");
         assert_eq!(
             output,
             "100 Capabilities\n\
@@ -365,7 +365,7 @@ mod tests {
             headers: vec![("Key".to_string(), "Value".to_string())],
         };
 
-        let output = format!("{}", message);
+        let output = format!("{message}");
         let parsed_message = Message::from_bytes(output.as_bytes())?;
         assert_eq!(parsed_message, message);
         Ok(())

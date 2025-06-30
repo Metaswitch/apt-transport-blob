@@ -61,22 +61,22 @@ impl Processor {
         // Get the URI. It's part of the interface to have this field here,
         // so a missing URI is a terminal error.
         let uri = message.uri()?;
-        info!("Acquiring URI: {}", uri);
+        info!("Acquiring URI: {uri}");
 
         // Get the filename to download to.
         let filename = unwrap_or_urifail!(uri, message.filename());
-        info!("Filename: {}", filename);
+        info!("Filename: {filename}");
 
         // Parse the url.
         let url = unwrap_or_urifail!(uri, Url::parse(uri));
-        info!("URL: {}", url);
+        info!("URL: {url}");
 
         let blob = unwrap_or_urifail!(uri, self.azure_registry.get_blob(&url));
-        debug!("AzureBlob: {:?}", blob);
+        debug!("AzureBlob: {blob:?}");
 
         let blob_exists = unwrap_or_urifail!(uri, blob.exists().await);
         if !blob_exists {
-            warn!("Blob doesn't exist! {}", uri);
+            warn!("Blob doesn't exist! {uri}");
             let message = Message::build_uri_failure(uri, "Blob does not exist");
             return Ok(message);
         }
@@ -84,17 +84,17 @@ impl Processor {
         // Get the blob's URI start fields.
         let (size, last_modified) = unwrap_or_urifail!(uri, blob.uri_start_fields().await);
 
-        info!("Blob size: {}", size);
-        info!("Last modified: {}", last_modified);
+        info!("Blob size: {size}");
+        info!("Last modified: {last_modified}");
 
         // Send a URI Start to indicate we're starting the transfer.
         Message::send_uri_start(uri, size, &last_modified);
-        info!("Sent URI start: {}", last_modified);
+        info!("Sent URI start: {last_modified}");
 
         // Now actually download the URI
         let contents = unwrap_or_urifail!(uri, blob.download().await);
 
-        info!("Downloaded blob: {}", uri);
+        info!("Downloaded blob: {uri}");
         // Write the contents to the file
         unwrap_or_urifail!(uri, std::fs::write(filename, contents));
 
