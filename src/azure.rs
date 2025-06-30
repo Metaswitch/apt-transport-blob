@@ -85,11 +85,11 @@ impl AzureRegistry {
         // storage.azure.com scope. It's prioritised over user credentials.
         let storage_credentials = match std::env::var("AZURE_STORAGE_BEARER_TOKEN") {
             Ok(token) => {
-                debug!("Using storage bearer token for accessing {}", account);
+                debug!("Using storage bearer token for accessing {account}");
                 StorageCredentials::bearer_token(token)
             }
             Err(_) => {
-                debug!("Using token credentials for accessing {}", account);
+                debug!("Using token credentials for accessing {account}");
                 StorageCredentials::token_credential(self.credential.clone())
             }
         };
