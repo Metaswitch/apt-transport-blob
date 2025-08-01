@@ -16,5 +16,6 @@
       "allowedVersions": "=0.21.0",
       "description": "Pin azure_core_for_storage to 0.21.0 as this is what azure_storage is currently based on."
     }
-  ]
+  ],
+  "automerge": true
 }
