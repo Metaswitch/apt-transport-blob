@@ -16,6 +16,8 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+      - name: Install clippy and fmt
+        run: rustup component add clippy rustfmt
       - name: Run cargo clippy to pick up any errors
         run: cargo clippy --all-targets -- -Dwarnings
       - name: Check code is formatted
