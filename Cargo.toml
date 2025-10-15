@@ -17,8 +17,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Azure SDK for Rust
-azure_identity = "0.28.0"
-azure_core = "0.28.0"
+azure_identity = "0.29.0"
+azure_core = "0.29.0"
 
 # Azure Storage is currently held at an older version.
 # Include a version of the azure_core crate that is compatible with the
