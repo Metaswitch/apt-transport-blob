@@ -11,7 +11,7 @@ jobs:
     name: Linting and Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -51,7 +51,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             experimental: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install musl
         run: |
           sudo apt-get update
