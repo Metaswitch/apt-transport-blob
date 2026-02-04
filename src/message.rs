@@ -8,7 +8,6 @@ use nom::combinator::map_res;
 use nom::multi::many0;
 use nom::{IResult, Parser};
 
-use log::error;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
