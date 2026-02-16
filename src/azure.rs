@@ -2,7 +2,11 @@
 // Licensed under the MIT License.
 use std::sync::Arc;
 
-use azure_identity::DeveloperToolsCredential;
+use azure_core::credentials::Secret;
+use azure_identity::{
+    ClientSecretCredential, DeveloperToolsCredential, ManagedIdentityCredential,
+    WorkloadIdentityCredential,
+};
 use azure_storage::StorageCredentials;
 use azure_storage_blobs::{
     blob::operations::GetPropertiesResponse,
@@ -56,6 +60,45 @@ impl AzureBlob {
     }
 }
 
+fn obtain_credential(
+) -> Result<Arc<dyn azure_core::credentials::TokenCredential>, Box<dyn std::error::Error>> {
+    // We need to try various different types of credentials. The order of precedence is:
+    // - "Environment variables": in legacy Azure SDKs this included:
+    //   - WorkloadIdentityCredential
+    //   - ClientSecretCredential
+    // - Azure CLI credentials
+    // - Managed Identity:
+    //   - AppServiceManagedIdentityCredential
+    //   - VirtualMachineManagedIdentityCredential
+    let azure_tenant_id = std::env::var("AZURE_TENANT_ID").ok();
+    let azure_client_id = std::env::var("AZURE_CLIENT_ID").ok();
+    let azure_client_secret = std::env::var("AZURE_CLIENT_SECRET").ok();
+
+    if let Ok(credential) = WorkloadIdentityCredential::new(None) {
+        debug!("Using WorkloadIdentityCredential for authentication");
+        return Ok(credential);
+    }
+    // Only use a ClientSecretCredential if all three of the relevant environment variables are set.
+    if let (Some(tenant_id), Some(client_id), Some(client_secret)) =
+        (azure_tenant_id, azure_client_id, azure_client_secret)
+    {
+        let secret = Secret::new(client_secret);
+        if let Ok(credential) = ClientSecretCredential::new(&tenant_id, client_id, secret, None) {
+            debug!("Using ClientSecretCredential for authentication");
+            return Ok(credential);
+        }
+    }
+    if let Ok(credential) = DeveloperToolsCredential::new(None) {
+        debug!("Using DeveloperToolsCredential for authentication");
+        return Ok(credential);
+    }
+    if let Ok(credential) = ManagedIdentityCredential::new(None) {
+        debug!("Using ManagedIdentityCredential for authentication");
+        return Ok(credential);
+    }
+    Err("No suitable credential found".into())
+}
+
 pub(crate) struct AzureRegistry {
     credential: Arc<TokenCredentialInterop>,
 }
@@ -63,7 +106,7 @@ pub(crate) struct AzureRegistry {
 impl AzureRegistry {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Get a credential for Azure
-        let default_credential = DeveloperToolsCredential::new(None)?;
+        let default_credential = obtain_credential()?;
         let credential = TokenCredentialInterop::new(default_credential);
 
         Ok(AzureRegistry {
