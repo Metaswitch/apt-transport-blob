@@ -72,7 +72,7 @@ jobs:
       - name: Build package
         run: cargo deb --target ${{ matrix.build.target }}
       - name: Archive artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: ${{ matrix.build.rust == 'stable' }}
         with:
           name: stableartifacts-${{ matrix.build.os }}-${{ matrix.build.target }}
