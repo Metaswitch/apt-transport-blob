@@ -26,9 +26,9 @@ pub struct Processor {
 }
 
 impl Processor {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Processor {
-            azure_registry: AzureRegistry::new()?,
+            azure_registry: AzureRegistry::new().await?,
         })
     }
 
@@ -115,8 +115,9 @@ mod tests {
     #[tokio::test]
     async fn test_configuration() -> Result<(), Box<dyn std::error::Error>> {
         init_logger();
+        std::env::set_var("AZURE_STORAGE_BEARER_TOKEN", "test-token");
         let message = Message::new(MessageType::Configuration, vec![]);
-        let processor = Processor::new()?;
+        let processor = Processor::new().await?;
         processor.process(message).await?;
         Ok(())
     }
@@ -124,8 +125,9 @@ mod tests {
     #[tokio::test]
     async fn test_unknown() -> Result<(), Box<dyn std::error::Error>> {
         init_logger();
+        std::env::set_var("AZURE_STORAGE_BEARER_TOKEN", "test-token");
         let message = Message::new(MessageType::Log, vec![]);
-        let processor = Processor::new()?;
+        let processor = Processor::new().await?;
         processor.process(message).await?;
         Ok(())
     }
