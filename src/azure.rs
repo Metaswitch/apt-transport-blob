@@ -230,20 +230,20 @@ async fn obtain_token(client: &RetryClient) -> Result<String, Box<dyn std::error
         Err(e) => warn!("ClientSecretCredential failed: {e}"),
     }
 
-    match try_managed_identity(client).await {
-        Ok(token) => {
-            debug!("Using ManagedIdentityCredential");
-            return Ok(token);
-        }
-        Err(e) => warn!("ManagedIdentityCredential failed: {e}"),
-    }
-
     match try_az_cli().await {
         Ok(token) => {
             debug!("Using DeveloperToolsCredential (az CLI)");
             return Ok(token);
         }
         Err(e) => warn!("DeveloperToolsCredential (az CLI) failed: {e}"),
+    }
+
+    match try_managed_identity(client).await {
+        Ok(token) => {
+            debug!("Using ManagedIdentityCredential");
+            return Ok(token);
+        }
+        Err(e) => warn!("ManagedIdentityCredential failed: {e}"),
     }
 
     Err("No suitable credential found".into())

@@ -51,32 +51,23 @@ Credentials are prioritised as follows:
   az account get-access-token --output tsv --query accessToken --resource https://storage.azure.com
   ```
 
-- Environment variables: allows authentication via the mechanisms described in
-  [environment_credentials.rs](https://github.com/Azure/azure-sdk-for-rust/blob/main/sdk/identity/src/token_credentials/environment_credentials.rs#L19) - i.e. setting the
-  environment variables:
-  - `AZURE_TENANT_ID`: The Azure Active Directory tenant/directory ID
+- Workload Identity: for use in environments with federated identity (e.g.
+  GitHub Actions, Kubernetes). Requires the following environment variables:
+  - `AZURE_TENANT_ID`: The Azure Active Directory tenant/directory ID.
+  - `AZURE_CLIENT_ID`: The client/application ID of an App Registration in the tenant.
+  - `AZURE_FEDERATED_TOKEN_FILE`: Path to a file containing a federated identity token.
+
+- Client Secret: for use with an App Registration's client secret. Requires the
+  following environment variables:
+  - `AZURE_TENANT_ID`: The Azure Active Directory tenant/directory ID.
   - `AZURE_CLIENT_ID`: The client/application ID of an App Registration in the tenant.
   - `AZURE_CLIENT_SECRET`: A client secret that was generated for the App Registration.
-  - or `AZURE_FEDERATED_TOKEN_FILE`: Path to an federated token file.
 
-- Azure CLI credentials: allows authentication via Azure CLI. Log in with
+- Azure CLI: uses an existing Azure CLI login session. Log in with
   ```bash
   az login
   ```
 
-- Managed Identity: can be used with Azure VMs, App Service and Azure Functions
-  applications.
-
-## Contributing
-
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+- Managed Identity: for use on Azure compute (VMs, App Service, Azure Functions).
+  Uses the Instance Metadata Service (IMDS) to obtain a token. This is tried
+  last as it requires a network call that will time out on non-Azure machines.
