@@ -79,3 +79,74 @@ jobs:
           path: |
             target/${{matrix.build.target}}/release/blob
             target/${{matrix.build.target}}/debian/*.deb
+
+  integration-test:
+    name: Integration Test (${{ matrix.auth }})
+    runs-on: ubuntu-latest
+    environment: integration-test
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        auth: [workload-identity, client-secret, developer-tools, storage-token]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      # Auth setup — each method configures env vars for the binary
+      - name: Set client secret credentials
+        if: matrix.auth == 'client-secret'
+        run: |
+          echo "AZURE_TENANT_ID=${{ secrets.ATB_TENANT_ID }}" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_ID=${{ secrets.ATB_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_SECRET=${{ secrets.ATB_CLIENT_SECRET }}" >> $GITHUB_ENV
+
+      - name: Azure Login
+        if: matrix.auth == 'developer-tools' || matrix.auth == 'storage-token'
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.ATB_CLIENT_ID }}","clientSecret":"${{ secrets.ATB_CLIENT_SECRET }}","subscriptionId":"${{ secrets.ATB_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.ATB_TENANT_ID }}"}'
+
+      - name: Generate storage token
+        if: matrix.auth == 'storage-token'
+        run: |
+          TOKEN=$(az account get-access-token --resource https://storage.azure.com --query accessToken -o tsv)
+          echo "AZURE_STORAGE_BEARER_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      # Common steps
+      - name: Build binary
+        run: cargo build --release
+      - name: Install apt transport
+        run: sudo cp target/release/blob /usr/lib/apt/methods/blob
+      - name: Add blob apt source
+        run: |
+          echo 'deb [trusted=yes] blob://debianrepoatb.blob.core.windows.net/packages /' | sudo tee /etc/apt/sources.list.d/blob-test.list
+
+      # Get the OIDC token if necessary - do this right before using it.
+      - name: Get GitHub OIDC token
+        if: matrix.auth == 'workload-identity'
+        run: |
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" \
+            | jq -r '.value')
+          echo "$TOKEN" > /tmp/github-oidc-token
+          echo "AZURE_FEDERATED_TOKEN_FILE=/tmp/github-oidc-token" >> $GITHUB_ENV
+          echo "AZURE_TENANT_ID=${{ secrets.ATB_TENANT_ID }}" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_ID=${{ secrets.ATB_CLIENT_ID }}" >> $GITHUB_ENV
+
+      # Actually install the package.
+      - name: apt update and install simpledeb
+        run: |
+          sudo -E apt-get update
+          sudo -E apt-get install -y simpledeb
+      - name: Upload transport log
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: log-${{ matrix.auth }}
+          path: /var/log/apt-transport-blob.log

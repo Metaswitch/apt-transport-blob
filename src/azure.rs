@@ -1,25 +1,267 @@
-// Copyright (c) Microsoft Corporation.
+// Copyright (c) Alianza, Inc. All rights reserved.
 // Licensed under the MIT License.
-use std::sync::Arc;
-
-use azure_core::credentials::Secret;
-use azure_identity::{
-    ClientSecretCredential, DeveloperToolsCredential, ManagedIdentityCredential,
-    WorkloadIdentityCredential,
-};
-use azure_storage::StorageCredentials;
-use azure_storage_blobs::{
-    blob::operations::GetPropertiesResponse,
-    prelude::{BlobClient, ClientBuilder},
-};
-use log::debug;
+use log::{debug, warn};
 use url::Url;
 
-use crate::azure_credential_interop::TokenCredentialInterop;
+const STORAGE_SCOPE: &str = "https://storage.azure.com/.default";
+const STORAGE_RESOURCE: &str = "https://storage.azure.com";
+const DEFAULT_AUTHORITY_HOST: &str = "login.microsoftonline.com";
+const IMDS_ENDPOINT: &str = "http://169.254.169.254/metadata/identity/oauth2/token";
 
-#[derive(Debug)]
+const MAX_RETRIES: u32 = 3;
+const RETRY_STATUSES: [u16; 6] = [408, 429, 500, 502, 503, 504];
+
+#[derive(Clone)]
+struct RetryClient {
+    inner: reqwest::Client,
+}
+
+impl RetryClient {
+    fn new() -> Self {
+        Self {
+            inner: reqwest::Client::new(),
+        }
+    }
+
+    fn get(&self, url: &str) -> RetryRequestBuilder {
+        RetryRequestBuilder(self.inner.get(url))
+    }
+
+    fn head(&self, url: &str) -> RetryRequestBuilder {
+        RetryRequestBuilder(self.inner.head(url))
+    }
+
+    fn post(&self, url: String) -> RetryRequestBuilder {
+        RetryRequestBuilder(self.inner.post(url))
+    }
+}
+
+struct RetryRequestBuilder(reqwest::RequestBuilder);
+
+impl RetryRequestBuilder {
+    fn header(self, key: &str, value: &str) -> Self {
+        Self(self.0.header(key, value))
+    }
+
+    fn form<T: serde::Serialize + ?Sized>(self, form: &T) -> Self {
+        Self(self.0.form(form))
+    }
+
+    fn query<T: serde::Serialize + ?Sized>(self, query: &T) -> Self {
+        Self(self.0.query(query))
+    }
+
+    fn timeout(self, timeout: std::time::Duration) -> Self {
+        Self(self.0.timeout(timeout))
+    }
+
+    async fn send(self) -> Result<reqwest::Response, Box<dyn std::error::Error>> {
+        for attempt in 0..MAX_RETRIES {
+            let cloned = self.0.try_clone().ok_or("Request body is not cloneable")?;
+            match cloned.send().await {
+                Ok(resp) if RETRY_STATUSES.contains(&resp.status().as_u16()) => {
+                    let status = resp.status();
+                    let delay = if status.as_u16() == 429 {
+                        resp.headers()
+                            .get("retry-after")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<u64>().ok())
+                            .map(std::time::Duration::from_secs)
+                    } else {
+                        None
+                    }
+                    .unwrap_or_else(|| std::time::Duration::from_millis(500 * 2u64.pow(attempt)));
+                    warn!(
+                        "Retryable status {status}, attempt {attempt}/{MAX_RETRIES}, retrying in {delay:?}"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+                Ok(resp) => return Ok(resp),
+                Err(e) if e.is_timeout() || e.is_connect() => {
+                    let delay = std::time::Duration::from_millis(500 * 2u64.pow(attempt));
+                    warn!(
+                        "Retryable error: {e}, attempt {attempt}/{MAX_RETRIES}, retrying in {delay:?}"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(self.0.send().await?)
+    }
+}
+
+fn extract_access_token(json: &serde_json::Value) -> Result<String, Box<dyn std::error::Error>> {
+    json.get("access_token")
+        .or_else(|| json.get("accessToken"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Missing access_token in response".into())
+}
+
+fn aad_token_url(tenant_id: &str) -> String {
+    let authority = std::env::var("AZURE_AUTHORITY_HOST")
+        .unwrap_or_else(|_| DEFAULT_AUTHORITY_HOST.to_string());
+    format!("https://{authority}/{tenant_id}/oauth2/v2.0/token")
+}
+
+async fn try_workload_identity(client: &RetryClient) -> Result<String, Box<dyn std::error::Error>> {
+    let tenant_id = std::env::var("AZURE_TENANT_ID")?;
+    let client_id = std::env::var("AZURE_CLIENT_ID")?;
+    let token_file = std::env::var("AZURE_FEDERATED_TOKEN_FILE")?;
+
+    let assertion = tokio::fs::read_to_string(&token_file).await?;
+
+    debug!("Trying WorkloadIdentityCredential");
+    let response = client
+        .post(aad_token_url(&tenant_id))
+        .form(&[
+            ("client_id", client_id.as_str()),
+            ("client_assertion", assertion.trim()),
+            (
+                "client_assertion_type",
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            ),
+            ("grant_type", "client_credentials"),
+            ("scope", STORAGE_SCOPE),
+        ])
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("WorkloadIdentity auth failed: {body}").into());
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    extract_access_token(&json)
+}
+
+async fn try_client_secret(client: &RetryClient) -> Result<String, Box<dyn std::error::Error>> {
+    let tenant_id = std::env::var("AZURE_TENANT_ID")?;
+    let client_id = std::env::var("AZURE_CLIENT_ID")?;
+    let client_secret = std::env::var("AZURE_CLIENT_SECRET")?;
+
+    debug!("Trying ClientSecretCredential");
+    let response = client
+        .post(aad_token_url(&tenant_id))
+        .form(&[
+            ("client_id", client_id.as_str()),
+            ("client_secret", client_secret.as_str()),
+            ("grant_type", "client_credentials"),
+            ("scope", STORAGE_SCOPE),
+        ])
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("ClientSecret auth failed: {body}").into());
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    extract_access_token(&json)
+}
+
+async fn try_managed_identity(client: &RetryClient) -> Result<String, Box<dyn std::error::Error>> {
+    debug!("Trying ManagedIdentityCredential");
+    let response = client
+        .get(IMDS_ENDPOINT)
+        .query(&[
+            ("api-version", "2018-02-01"),
+            ("resource", STORAGE_RESOURCE),
+        ])
+        .header("Metadata", "true")
+        .timeout(std::time::Duration::from_secs(2))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("ManagedIdentity auth failed: {body}").into());
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    extract_access_token(&json)
+}
+
+async fn try_az_cli() -> Result<String, Box<dyn std::error::Error>> {
+    debug!("Trying DeveloperToolsCredential (az CLI)");
+    let output = tokio::process::Command::new("az")
+        .args([
+            "account",
+            "get-access-token",
+            "--resource",
+            STORAGE_RESOURCE,
+            "--output",
+            "json",
+        ])
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("az CLI failed: {stderr}").into());
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    extract_access_token(&json)
+}
+
+async fn obtain_token(client: &RetryClient) -> Result<String, Box<dyn std::error::Error>> {
+    if let Ok(token) = std::env::var("AZURE_STORAGE_BEARER_TOKEN") {
+        debug!("Using AZURE_STORAGE_BEARER_TOKEN environment variable");
+        return Ok(token);
+    }
+
+    match try_workload_identity(client).await {
+        Ok(token) => {
+            debug!("Using WorkloadIdentityCredential");
+            return Ok(token);
+        }
+        Err(e) => warn!("WorkloadIdentityCredential failed: {e}"),
+    }
+
+    match try_client_secret(client).await {
+        Ok(token) => {
+            debug!("Using ClientSecretCredential");
+            return Ok(token);
+        }
+        Err(e) => warn!("ClientSecretCredential failed: {e}"),
+    }
+
+    match try_managed_identity(client).await {
+        Ok(token) => {
+            debug!("Using ManagedIdentityCredential");
+            return Ok(token);
+        }
+        Err(e) => warn!("ManagedIdentityCredential failed: {e}"),
+    }
+
+    match try_az_cli().await {
+        Ok(token) => {
+            debug!("Using DeveloperToolsCredential (az CLI)");
+            return Ok(token);
+        }
+        Err(e) => warn!("DeveloperToolsCredential (az CLI) failed: {e}"),
+    }
+
+    Err("No suitable credential found".into())
+}
+
 pub struct AzureBlob {
-    blob_client: BlobClient,
+    client: RetryClient,
+    url: String,
+    token: String,
+}
+
+impl std::fmt::Debug for AzureBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AzureBlob")
+            .field("url", &self.url)
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl AzureBlob {
@@ -27,117 +269,101 @@ impl AzureBlob {
         azure_registry: &AzureRegistry,
         url: &Url,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let host = url.host_str().ok_or("No host")?;
-        let mut path_segments = url.path_segments().ok_or("No path segments")?;
-        let container_name = path_segments.next().ok_or("No container")?;
-        let blob_name = path_segments.collect::<Vec<_>>().join("/");
-        let account = host.trim_end_matches(".blob.core.windows.net");
+        let https_url = format!(
+            "https://{}{}",
+            url.host_str().ok_or("No host in URL")?,
+            url.path()
+        );
+        Ok(AzureBlob {
+            client: azure_registry.client.clone(),
+            url: https_url,
+            token: azure_registry.token.clone(),
+        })
+    }
 
-        let blob_client = azure_registry.get_blob_client(account, container_name, &blob_name);
-
-        Ok(AzureBlob { blob_client })
+    fn auth_header(&self) -> String {
+        format!("Bearer {}", self.token)
     }
 
     pub async fn exists(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        Ok(self.blob_client.exists().await?)
-    }
+        let auth = self.auth_header();
+        let response = self
+            .client
+            .head(&self.url)
+            .header("Authorization", &auth)
+            .header("x-ms-version", "2020-04-08")
+            .send()
+            .await?;
 
-    pub async fn properties(&self) -> Result<GetPropertiesResponse, Box<dyn std::error::Error>> {
-        Ok(self.blob_client.get_properties().await?)
+        match response.status().as_u16() {
+            200 => Ok(true),
+            404 => Ok(false),
+            status => Err(format!("Unexpected status {status} checking blob existence").into()),
+        }
     }
 
     pub async fn uri_start_fields(&self) -> Result<(u64, String), Box<dyn std::error::Error>> {
-        // Return the size and the last modified time
-        let properties = self.properties().await?;
-        Ok((
-            properties.blob.properties.content_length,
-            properties.blob.properties.last_modified.to_string(),
-        ))
+        let auth = self.auth_header();
+        let response = self
+            .client
+            .head(&self.url)
+            .header("Authorization", &auth)
+            .header("x-ms-version", "2020-04-08")
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to get blob properties: {}", response.status()).into());
+        }
+
+        let content_length = response
+            .headers()
+            .get("Content-Length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok())
+            .ok_or("Missing or invalid Content-Length header")?;
+
+        let last_modified = response
+            .headers()
+            .get("Last-Modified")
+            .and_then(|v| v.to_str().ok())
+            .ok_or("Missing Last-Modified header")?
+            .to_string();
+
+        Ok((content_length, last_modified))
     }
 
     pub(crate) async fn download(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        Ok(self.blob_client.get_content().await?)
-    }
-}
+        let auth = self.auth_header();
+        let response = self
+            .client
+            .get(&self.url)
+            .header("Authorization", &auth)
+            .header("x-ms-version", "2020-04-08")
+            .send()
+            .await?;
 
-fn obtain_credential(
-) -> Result<Arc<dyn azure_core::credentials::TokenCredential>, Box<dyn std::error::Error>> {
-    // We need to try various different types of credentials. The order of precedence is:
-    // - "Environment variables": in legacy Azure SDKs this included:
-    //   - WorkloadIdentityCredential
-    //   - ClientSecretCredential
-    // - Azure CLI credentials
-    // - Managed Identity:
-    //   - AppServiceManagedIdentityCredential
-    //   - VirtualMachineManagedIdentityCredential
-    let azure_tenant_id = std::env::var("AZURE_TENANT_ID").ok();
-    let azure_client_id = std::env::var("AZURE_CLIENT_ID").ok();
-    let azure_client_secret = std::env::var("AZURE_CLIENT_SECRET").ok();
-
-    if let Ok(credential) = WorkloadIdentityCredential::new(None) {
-        debug!("Using WorkloadIdentityCredential for authentication");
-        return Ok(credential);
-    }
-    // Only use a ClientSecretCredential if all three of the relevant environment variables are set.
-    if let (Some(tenant_id), Some(client_id), Some(client_secret)) =
-        (azure_tenant_id, azure_client_id, azure_client_secret)
-    {
-        let secret = Secret::new(client_secret);
-        if let Ok(credential) = ClientSecretCredential::new(&tenant_id, client_id, secret, None) {
-            debug!("Using ClientSecretCredential for authentication");
-            return Ok(credential);
+        if !response.status().is_success() {
+            return Err(format!("Failed to download blob: {}", response.status()).into());
         }
+
+        Ok(response.bytes().await?.to_vec())
     }
-    if let Ok(credential) = DeveloperToolsCredential::new(None) {
-        debug!("Using DeveloperToolsCredential for authentication");
-        return Ok(credential);
-    }
-    if let Ok(credential) = ManagedIdentityCredential::new(None) {
-        debug!("Using ManagedIdentityCredential for authentication");
-        return Ok(credential);
-    }
-    Err("No suitable credential found".into())
 }
 
 pub(crate) struct AzureRegistry {
-    credential: Arc<TokenCredentialInterop>,
+    client: RetryClient,
+    token: String,
 }
 
 impl AzureRegistry {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Get a credential for Azure
-        let default_credential = obtain_credential()?;
-        let credential = TokenCredentialInterop::new(default_credential);
-
-        Ok(AzureRegistry {
-            credential: Arc::new(credential),
-        })
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let client = RetryClient::new();
+        let token = obtain_token(&client).await?;
+        Ok(AzureRegistry { client, token })
     }
 
     pub fn get_blob(&self, url: &Url) -> Result<AzureBlob, Box<dyn std::error::Error>> {
         AzureBlob::new_from_url(self, url)
-    }
-
-    pub fn get_blob_client(
-        &self,
-        account: &str,
-        container_name: &str,
-        blob_name: &str,
-    ) -> BlobClient {
-        // Check to see if an AZURE_STORAGE_BEARER_TOKEN is set. This is a token with the
-        // storage.azure.com scope. It's prioritised over user credentials.
-        let storage_credentials = match std::env::var("AZURE_STORAGE_BEARER_TOKEN") {
-            Ok(token) => {
-                debug!("Using storage bearer token for accessing {account}");
-                StorageCredentials::bearer_token(token)
-            }
-            Err(_) => {
-                debug!("Using token credentials for accessing {account}");
-                StorageCredentials::token_credential(self.credential.clone())
-            }
-        };
-
-        // Get the client builder.
-        ClientBuilder::new(account, storage_credentials).blob_client(container_name, blob_name)
     }
 }
