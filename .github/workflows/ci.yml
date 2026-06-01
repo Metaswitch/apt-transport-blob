@@ -23,6 +23,29 @@ jobs:
       - name: Check code is formatted
         run: cargo fmt -- --check
 
+  debstatus:
+    name: Debian version check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-debstatus
+        run: cargo install cargo-debstatus
+      - name: Run cargo debstatus
+        run: cargo debstatus --json > /tmp/debstatus.json
+      - name: Archive debstatus output
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: debstatus
+          path: /tmp/debstatus.json
+      - name: Check all dependencies match Debian
+        run: jq -s 'map(select(.depth == 1 and (.debian.exact_match | not))) | if length > 0 then "Mismatched dependencies:", ., halt_error(1) else "All dependencies match Debian" end' /tmp/debstatus.json
+
   build:
     name: Build package
     runs-on: ${{ matrix.build.os }}
