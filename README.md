@@ -71,3 +71,12 @@ Credentials are prioritised as follows:
 - Managed Identity: for use on Azure compute (VMs, App Service, Azure Functions).
   Uses the Instance Metadata Service (IMDS) to obtain a token. This is tried
   last as it requires a network call that will time out on non-Azure machines.
+
+## Debian compatibility
+
+Direct dependencies are pinned to the exact versions available in Debian
+unstable. This allows the package to be built with `cargo` in a Debian
+packaging environment without vendoring or patching crate versions.
+
+The CI pipeline runs `cargo debstatus` to enforce this. If Renovate (or a
+manual edit) bumps a dependency past what Debian carries, the check will fail.
