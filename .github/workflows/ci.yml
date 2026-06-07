@@ -131,7 +131,7 @@ jobs:
 
       - name: Azure Login
         if: matrix.auth == 'developer-tools' || matrix.auth == 'storage-token'
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: '{"clientId":"${{ secrets.ATB_CLIENT_ID }}","clientSecret":"${{ secrets.ATB_CLIENT_SECRET }}","subscriptionId":"${{ secrets.ATB_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.ATB_TENANT_ID }}"}'
 
