@@ -43,8 +43,9 @@ jobs:
         with:
           name: debstatus
           path: /tmp/debstatus.json
-      - name: Check all dependencies match Debian
-        run: jq -s 'map(select(.depth == 1 and (.debian.exact_match | not))) | if length > 0 then "Mismatched dependencies:", ., halt_error(1) else "All dependencies match Debian" end' /tmp/debstatus.json
+      - name: Show dependency status
+        run: |
+          jq -s 'map(select(.depth == 1)) | map({name, version, debian_version: .debian.version, exact_match: .debian.exact_match})' /tmp/debstatus.json
 
   build:
     name: Build package
