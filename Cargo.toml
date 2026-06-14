@@ -16,20 +16,20 @@ name = "blob"
 path = "src/main.rs"
 
 [dependencies]
-bytes = "=1.11.1"
-log = "=0.4.29"
-log4rs = { version = "=1.4.0", default-features = false, features = ["file_appender", "pattern_encoder"] }
-nom = "=8.0.0"
-reqwest = { version = "=0.13.2", default-features = false, features = ["rustls", "json", "query", "form"] }
-serde = "=1.0.228"
-serde_json = "=1.0.149"
-thiserror = "=2.0.18"
-tokio = { version = "=1.52.3", features = ["macros", "rt-multi-thread", "fs", "process"] }
-url = "=2.5.8"
+bytes = "1"
+log = "0.4"
+log4rs = { version = "1", default-features = false, features = ["file_appender", "pattern_encoder"] }
+nom = "8"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "query", "form"] }
+serde = "1"
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "process"] }
+url = "2"
 
 [dev-dependencies]
-env_logger = "=0.11.10"
-tempfile = "=3.24.0"
+env_logger = "0.11"
+tempfile = "3"
 
 [profile.release]
 # Optimise for size
