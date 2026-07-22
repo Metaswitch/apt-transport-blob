@@ -74,9 +74,7 @@ Credentials are prioritised as follows:
 
 ## Debian compatibility
 
-Direct dependencies are pinned to the exact versions available in Debian
-unstable. This allows the package to be built with `cargo` in a Debian
-packaging environment without vendoring or patching crate versions.
-
-The CI pipeline runs `cargo debstatus` to enforce this. If Renovate (or a
-manual edit) bumps a dependency past what Debian carries, the check will fail.
+The CI pipeline runs `cargo debstatus` and prints how the direct dependencies
+compare to the versions available in Debian. This is informational only and
+does not fail the build. Debian's "default" crate versions track upstream
+closely, so pinning to match them is not worth the churn.
