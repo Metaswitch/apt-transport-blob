@@ -107,6 +107,7 @@ jobs:
   integration-test:
     name: Integration Test (${{ matrix.auth }})
     runs-on: ubuntu-latest
+    needs: build
     environment: integration-test
     permissions:
       id-token: write
@@ -117,10 +118,6 @@ jobs:
         auth: [workload-identity, client-secret, developer-tools, storage-token]
     steps:
       - uses: actions/checkout@v7
-      - name: Install rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
 
       # Auth setup — each method configures env vars for the binary
       - name: Set client secret credentials
@@ -142,11 +139,16 @@ jobs:
           TOKEN=$(az account get-access-token --resource https://storage.azure.com --query accessToken -o tsv)
           echo "AZURE_STORAGE_BEARER_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-      # Common steps
-      - name: Build binary
-        run: cargo build --release
-      - name: Install apt transport
-        run: sudo cp target/release/blob /usr/lib/apt/methods/blob
+      # Common steps - install the built .deb so we exercise the real
+      # package delivery path (dpkg asset placement, permissions, deps)
+      # rather than copying the raw binary into place.
+      - name: Download built package
+        uses: actions/download-artifact@v7
+        with:
+          name: stableartifacts-ubuntu-24.04-x86_64-unknown-linux-gnu
+          path: pkg
+      - name: Install apt transport package
+        run: sudo apt-get install -y ./pkg/debian/*.deb
       - name: Add blob apt source
         run: |
           echo 'deb [trusted=yes] blob://debianrepoatb.blob.core.windows.net/packages /' | sudo tee /etc/apt/sources.list.d/blob-test.list
