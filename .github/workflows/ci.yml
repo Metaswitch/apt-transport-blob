@@ -11,9 +11,9 @@ jobs:
     name: Linting and Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
         with:
           toolchain: stable
       - name: Install clippy and fmt
@@ -27,18 +27,18 @@ jobs:
     name: Debian version check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Install cargo-debstatus
         run: cargo install cargo-debstatus
       - name: Run cargo debstatus
         run: cargo debstatus --json > /tmp/debstatus.json
       - name: Archive debstatus output
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: debstatus
@@ -75,7 +75,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             experimental: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install musl
         run: |
           sudo apt-get update
@@ -83,7 +83,7 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
         if: ${{ matrix.build.target == 'x86_64-unknown-linux-musl' }}
       - name: Install rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
         with:
             toolchain: ${{ matrix.build.rust }}
             target: ${{ matrix.build.target }}
@@ -96,7 +96,7 @@ jobs:
       - name: Build package
         run: cargo deb --target ${{ matrix.build.target }}
       - name: Archive artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: ${{ matrix.build.rust == 'stable' }}
         with:
           name: stableartifacts-${{ matrix.build.os }}-${{ matrix.build.target }}
@@ -117,7 +117,7 @@ jobs:
       matrix:
         auth: [workload-identity, client-secret, developer-tools, storage-token]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Auth setup — each method configures env vars for the binary
       - name: Set client secret credentials
@@ -129,7 +129,7 @@ jobs:
 
       - name: Azure Login
         if: matrix.auth == 'developer-tools' || matrix.auth == 'storage-token'
-        uses: azure/login@v3
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
           creds: '{"clientId":"${{ secrets.ATB_CLIENT_ID }}","clientSecret":"${{ secrets.ATB_CLIENT_SECRET }}","subscriptionId":"${{ secrets.ATB_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.ATB_TENANT_ID }}"}'
 
@@ -143,7 +143,7 @@ jobs:
       # package delivery path (dpkg asset placement, permissions, deps)
       # rather than copying the raw binary into place.
       - name: Download built package
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: stableartifacts-ubuntu-24.04-x86_64-unknown-linux-gnu
           path: pkg
@@ -171,7 +171,7 @@ jobs:
           sudo -E apt-get update
           sudo -E apt-get install -y simpledeb
       - name: Upload transport log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: log-${{ matrix.auth }}
