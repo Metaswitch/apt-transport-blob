@@ -28,8 +28,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "process
 url = "2"
 
 [dev-dependencies]
-env_logger = "0.11"
-tempfile = "3"
+env_logger = "=0.11.11"
+tempfile = "=3.27.0"
 
 [profile.release]
 # Optimise for size
