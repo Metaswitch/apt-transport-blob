@@ -2,5 +2,15 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>Metaswitch/renovate:maxdymond"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": [
+        "cargo install --locked (?<depName>[a-z0-9-]+)@(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "crate"
+    }
   ]
 }

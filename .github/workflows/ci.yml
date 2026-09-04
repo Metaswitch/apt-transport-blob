@@ -34,7 +34,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Install cargo-debstatus
-        run: cargo install cargo-debstatus
+        run: cargo install --locked cargo-debstatus@0.6.6
       - name: Run cargo debstatus
         run: cargo debstatus --json > /tmp/debstatus.json
       - name: Archive debstatus output
@@ -88,7 +88,7 @@ jobs:
             toolchain: ${{ matrix.build.rust }}
             target: ${{ matrix.build.target }}
       - name: Install cargo-deb
-        run: cargo install cargo-deb
+        run: cargo install --locked cargo-deb@3.8.0
       - name: Run tests
         run: cargo test --all-features --target ${{ matrix.build.target }}
       - name: Build binary
