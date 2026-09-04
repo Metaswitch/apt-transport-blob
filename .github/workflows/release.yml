@@ -43,10 +43,10 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
 
       - name: Install semantic-release-cargo
-        run: cargo install --locked semantic-release-cargo
+        run: cargo install --locked semantic-release-cargo@2.4.84
 
       - name: Install cargo-deb
-        run: cargo install --locked cargo-deb
+        run: cargo install --locked cargo-deb@3.8.0
 
       - name: Prepare semantic-release for Rust
         run: semantic-release-cargo prepare ${{ needs.get-next-version.outputs.new-release-version }}
