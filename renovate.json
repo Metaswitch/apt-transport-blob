@@ -3,6 +3,9 @@
   "extends": [
     "github>Metaswitch/renovate:maxdymond"
   ],
+  "npm": {
+    "skipInstalls": false
+  },
   "customManagers": [
     {
       "customType": "regex",
