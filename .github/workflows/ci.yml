@@ -108,6 +108,8 @@ jobs:
     name: Integration Test (${{ matrix.auth }})
     runs-on: ubuntu-latest
     needs: build
+    # Fork PRs don't get secrets, so the tests would only fail.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     environment: integration-test
     permissions:
       id-token: write
