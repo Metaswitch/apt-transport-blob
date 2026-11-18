@@ -170,8 +170,12 @@ jobs:
       # Actually install the package.
       - name: apt update and install simpledeb
         run: |
-          sudo -E apt-get update
-          sudo -E apt-get install -y simpledeb
+          # sudo-rs requires explicit environment names.
+          # HOME keeps the Azure CLI session accessible.
+          apt_auth_env=HOME,AZURE_CONFIG_DIR,AZURE_TENANT_ID,AZURE_CLIENT_ID,AZURE_CLIENT_SECRET
+          apt_auth_env+=,AZURE_FEDERATED_TOKEN_FILE,AZURE_STORAGE_BEARER_TOKEN
+          sudo --preserve-env="$apt_auth_env" apt-get update
+          sudo --preserve-env="$apt_auth_env" apt-get install -y simpledeb
       - name: Upload transport log
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
